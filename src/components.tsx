@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import appIcon from '../assets/icon.png';
 import {
   Check,
   ChevronRight,
@@ -29,14 +30,7 @@ import type {
 export function Brand({ small = false }: { small?: boolean }) {
   return (
     <span className={`brand-mark ${small ? 'small' : ''}`} aria-hidden="true">
-      <svg viewBox="0 0 32 32" fill="none">
-        <path
-          d="M24 9.5A11 11 0 1 0 24 22.5M9 16h15M16 9v14"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-        />
-      </svg>
+      <img src={appIcon} alt="" draggable={false} />
     </span>
   );
 }
@@ -346,11 +340,7 @@ export function Message({ message, live }: { message: ChatMessage; live: boolean
                   <ChevronRight size={13} className="disclosure" />
                   <Brain size={14} />
                   <span>
-                    {block.durationMs !== undefined
-                      ? '思考过程'
-                      : live
-                        ? '正在思考'
-                        : '思考过程'}
+                    {block.durationMs !== undefined ? '思考过程' : live ? '正在思考' : '思考过程'}
                   </span>
                   <span className="subtle-label">模型返回</span>
                 </summary>

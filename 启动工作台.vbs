@@ -1,7 +1,7 @@
 Set fs = CreateObject("Scripting.FileSystemObject")
 Set sh = CreateObject("WScript.Shell")
 root = fs.GetParentFolderName(WScript.ScriptFullName)
-packaged = fs.BuildPath(root, "release\0.2.0\win-unpacked\Claude Workbench.exe")
+packaged = fs.BuildPath(root, "release\0.3.0\win-unpacked\Claude Workbench.exe")
 localExe = fs.BuildPath(root, "node_modules\electron\dist\electron.exe")
 sh.CurrentDirectory = root
 sh.Environment("PROCESS").Remove "ELECTRON_RUN_AS_NODE"

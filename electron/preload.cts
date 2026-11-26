@@ -19,12 +19,14 @@ const api: DesktopAPI = {
   updateNotes: (projectId, notes, enabled) =>
     ipcRenderer.invoke('project:notes', projectId, notes, enabled),
   setTheme: (theme) => ipcRenderer.invoke('app:theme', theme),
+  setPermissionMode: (mode) => ipcRenderer.invoke('app:permission-mode', mode),
   exportSession: (id) => ipcRenderer.invoke('session:export', id),
   showProject: (id) => ipcRenderer.invoke('project:show', id),
   openExternal: (url) => ipcRenderer.invoke('app:external', url),
   minimize: () => ipcRenderer.invoke('window:minimize'),
   maximize: () => ipcRenderer.invoke('window:maximize'),
   closeWindow: () => ipcRenderer.invoke('window:close'),
+  quitApp: () => ipcRenderer.invoke('app:quit'),
   onEvent: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, event: AppEvent) => callback(event);
     ipcRenderer.on('app:event', handler);

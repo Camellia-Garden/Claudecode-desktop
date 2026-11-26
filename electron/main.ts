@@ -1,11 +1,17 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu } from 'electron';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stat, realpath, writeFile } from 'node:fs/promises';
 import { Store } from './store.js';
 import { ClaudeRunner } from './runner.js';
 import { inspectLocalConfig } from './config.js';
-import type { AppEvent, Session, Theme, PermissionAnswer } from '../shared/types.js';
+import type {
+  AppEvent,
+  Session,
+  Theme,
+  PermissionAnswer,
+  PermissionMode,
+} from '../shared/types.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../..');
@@ -17,7 +23,7 @@ app.setAppUserModelId('local.claude.workbench');
 let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
-let closing = false;
+let stoppingForQuit = false;
 let store: Store;
 let runner: ClaudeRunner;
 
@@ -85,6 +91,7 @@ function registerIPC() {
     projects: store.projects,
     sessions: store.list(),
     theme: store.theme,
+    permissionMode: store.permissionMode,
     ...(await syncConfig()),
     dataPath: store.root,
     appVersion: app.getVersion(),
@@ -146,6 +153,7 @@ function registerIPC() {
     return project;
   });
   handle('app:theme', (theme: Theme) => store.setTheme(theme));
+  handle('app:permission-mode', (mode: PermissionMode) => store.setPermissionMode(mode));
   handle('session:export', async (id) => {
     const session = store.get(textArg(id, 80));
     const result = await dialog.showSaveDialog(window!, {
@@ -171,36 +179,39 @@ function registerIPC() {
     window?.isMaximized() ? window.unmaximize() : window?.maximize(),
   );
   handle('window:close', () => window?.close());
+  handle('app:quit', () => {
+    setTimeout(() => app.quit(), 50);
+  });
 }
 
 function createTray() {
   if (tray) return;
-  tray = new Tray(nativeImage.createFromPath(join(appRoot, 'assets', 'icon.png')));
-  tray.setToolTip('Claude Workbench · 任务在后台运行');
+  const icon = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+  tray = new Tray(join(appRoot, 'assets', icon));
+  tray.setToolTip('Claude Workbench · 单击打开，右键退出');
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
         label: '打开 Claude Workbench',
-        click: () => {
-          window?.show();
-          window?.focus();
-        },
+        click: showWindow,
       },
       { type: 'separator' },
       {
-        label: '停止任务并退出',
-        click: async () => {
-          await runner.stopAll();
-          quitting = true;
-          app.quit();
-        },
+        id: 'quit-workbench',
+        label: '退出工作台',
+        click: () => app.quit(),
       },
     ]),
   );
-  tray.on('double-click', () => {
-    window?.show();
-    window?.focus();
-  });
+  tray.on('click', showWindow);
+  tray.on('double-click', showWindow);
+}
+
+function showWindow() {
+  if (!window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
 }
 
 async function createWindow() {
@@ -228,34 +239,9 @@ async function createWindow() {
     callback(false),
   );
   window.on('close', (event) => {
-    if (quitting || !runner.activeCount) return;
+    if (quitting) return;
     event.preventDefault();
-    if (closing) return;
-    closing = true;
-    void dialog
-      .showMessageBox(window!, {
-        type: 'question',
-        title: 'Claude 仍在工作',
-        message: '当前还有任务正在运行',
-        detail: '可以留在托盘继续工作，或停止任务并退出。对话记录会保留。',
-        buttons: ['留在后台', '停止并退出', '取消'],
-        defaultId: 0,
-        cancelId: 2,
-      })
-      .then(async (result) => {
-        if (result.response === 0) {
-          createTray();
-          window?.hide();
-        }
-        if (result.response === 1) {
-          await runner.stopAll();
-          quitting = true;
-          app.quit();
-        }
-      })
-      .finally(() => {
-        closing = false;
-      });
+    window?.hide();
   });
   window.on('closed', () => {
     window = null;
@@ -271,9 +257,7 @@ async function createWindow() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => {
-    if (window?.isMinimized()) window.restore();
-    window?.show();
-    window?.focus();
+    showWindow();
   });
   app
     .whenReady()
@@ -282,6 +266,7 @@ else {
       runner = new ClaudeRunner(store, emit);
       registerIPC();
       Menu.setApplicationMenu(null);
+      createTray();
       await createWindow();
     })
     .catch((error) => {
@@ -291,7 +276,21 @@ else {
   app.on('window-all-closed', () => {
     if (!runner?.activeCount) app.quit();
   });
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
+    if (!quitting && runner?.activeCount) {
+      event.preventDefault();
+      if (stoppingForQuit) return;
+      stoppingForQuit = true;
+      void runner.stopAll().finally(() => {
+        quitting = true;
+        app.quit();
+      });
+      return;
+    }
     quitting = true;
+  });
+  app.on('will-quit', () => {
+    tray?.destroy();
+    tray = null;
   });
 }

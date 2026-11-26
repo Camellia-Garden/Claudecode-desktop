@@ -1,5 +1,6 @@
 export type RunStatus = 'idle' | 'running' | 'waiting' | 'error' | 'interrupted';
 export type Theme = 'dark' | 'light' | 'system';
+export type PermissionMode = 'default' | 'bypassPermissions';
 
 export interface Project {
   id: string;
@@ -45,6 +46,7 @@ export interface SessionSummary {
   messageCount: number;
   model?: string;
   imported?: boolean;
+  permissionMode?: PermissionMode;
 }
 
 export interface Session extends SessionSummary {
@@ -91,6 +93,7 @@ export interface Bootstrap {
   projects: Project[];
   sessions: SessionSummary[];
   theme: Theme;
+  permissionMode: PermissionMode;
   cli: CliInfo;
   config: ConfigInfo;
   dataPath: string;
@@ -139,11 +142,13 @@ export interface DesktopAPI {
   importHistory(projectId: string, ids: string[]): Promise<SessionSummary[]>;
   updateNotes(projectId: string, notes: string, enabled: boolean): Promise<Project>;
   setTheme(theme: Theme): Promise<void>;
+  setPermissionMode(mode: PermissionMode): Promise<void>;
   exportSession(id: string): Promise<string | null>;
   showProject(id: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   minimize(): Promise<void>;
   maximize(): Promise<void>;
   closeWindow(): Promise<void>;
+  quitApp(): Promise<void>;
   onEvent(callback: (event: AppEvent) => void): () => void;
 }

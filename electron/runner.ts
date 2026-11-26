@@ -13,6 +13,7 @@ import type {
   PermissionAnswer,
   Session,
   HistoryEntry,
+  PermissionMode,
 } from '../shared/types.js';
 import { Store, summarize } from './store.js';
 import { Transcript, importMessages, redactError } from './transcript.js';
@@ -100,11 +101,13 @@ export class ClaudeRunner {
     if (session.title === '新对话') session.title = text.replace(/\s+/g, ' ').slice(0, 36);
     session.archived = false;
     session.updatedAt = new Date().toISOString();
+    const permissionMode = this.store.permissionMode;
+    session.permissionMode = permissionMode;
     session.status = 'running';
     const run: Run = { abort: new AbortController(), transcript: new Transcript(session) };
     this.runs.set(session.id, run);
     this.publish(session);
-    run.promise = this.execute(session, run, cli.path, prompt);
+    run.promise = this.execute(session, run, cli.path, prompt, permissionMode);
   }
 
   private publish(session: Session) {
@@ -112,7 +115,13 @@ export class ClaudeRunner {
     this.emit({ type: 'session', session: structuredClone(session) });
   }
 
-  private async execute(session: Session, run: Run, executable: string, prompt: string) {
+  private async execute(
+    session: Session,
+    run: Run,
+    executable: string,
+    prompt: string,
+    permissionMode: PermissionMode,
+  ) {
     let stderrTail = '';
     try {
       run.query = this.services.query({
@@ -123,20 +132,28 @@ export class ClaudeRunner {
           settingSources: ['user', 'project', 'local'],
           systemPrompt: { type: 'preset', preset: 'claude_code' },
           includePartialMessages: true,
+          permissionMode,
+          ...(permissionMode === 'bypassPermissions'
+            ? { allowDangerouslySkipPermissions: true }
+            : {}),
           resume: session.cliSessionId,
           abortController: run.abort,
           stderr: (data) => {
             stderrTail = (stderrTail + redactError(data)).slice(-4000);
           },
-          canUseTool: (toolName, toolInput, options) =>
-            this.requestPermission(
+          canUseTool: async (toolName, toolInput, options) => {
+            if (permissionMode === 'bypassPermissions' && toolName !== 'AskUserQuestion') {
+              return { behavior: 'allow', updatedInput: toolInput };
+            }
+            return this.requestPermission(
               session,
               toolName,
               toolInput,
               options.signal,
               options.decisionReason,
               options.blockedPath,
-            ),
+            );
+          },
         },
       });
       for await (const message of run.query) {

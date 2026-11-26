@@ -76,6 +76,15 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.getByText('本机 Claude Code', { exact: true }).waitFor({ timeout: 30000 });
   const initialConfig = await page.evaluate(() => window.desktop.bootstrap());
+  assert.equal(initialConfig.permissionMode, 'default');
+  await page
+    .getByRole('combobox', { name: '权限模式', exact: true })
+    .selectOption('bypassPermissions');
+  await page
+    .getByText('已保存完全访问：后续任务无需逐项授权，当前任务保持原权限', { exact: true })
+    .waitFor();
+  const selectedPermissions = await page.evaluate(() => window.desktop.bootstrap());
+  assert.equal(selectedPermissions.permissionMode, 'bypassPermissions');
   assert.equal(initialConfig.config.configuredModel, 'fixture-model-one');
   assert.doesNotMatch(JSON.stringify(initialConfig), /private-ui-fixture/);
   writeFileSync(settingsFile, settingsText('fixture-model-two'));
@@ -84,6 +93,10 @@ try {
     .getByText('已同步本机配置，下一条消息将重新读取；进行中的任务不受影响', { exact: true })
     .waitFor();
   await page.getByRole('button', { name: /^设置/ }).click();
+  assert.equal(
+    await page.getByRole('combobox', { name: '设置权限模式' }).inputValue(),
+    'bypassPermissions',
+  );
   await page.getByText('fixture-model-two', { exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/desktop-config-sync.png', animations: 'disabled' });
   await page.getByRole('button', { name: '关闭弹窗' }).click();
@@ -141,6 +154,21 @@ try {
   await restored.getByText('界面测试数据', { exact: false }).first().waitFor({ timeout: 30000 });
   assert.equal(await restored.locator('html').getAttribute('data-theme'), 'light');
   const state = await restored.evaluate(() => window.desktop.bootstrap());
+  assert.equal(state.permissionMode, 'bypassPermissions');
+  assert.equal(
+    await restored.getByRole('combobox', { name: '权限模式', exact: true }).inputValue(),
+    'bypassPermissions',
+  );
+  await restored.getByRole('button', { name: /^设置/ }).click();
+  await restored.getByRole('combobox', { name: '设置权限模式' }).selectOption('default');
+  await restored
+    .getByText('已保存默认权限：后续任务按需询问，当前任务保持原权限', { exact: true })
+    .waitFor();
+  await restored.getByRole('button', { name: '关闭弹窗' }).click();
+  assert.equal(
+    await restored.getByRole('combobox', { name: '权限模式', exact: true }).inputValue(),
+    'default',
+  );
   assert.equal(
     state.projects.find((item) => item.id === project.id).notes,
     'UI 检查备注，重启后应保留。',
@@ -160,6 +188,7 @@ try {
           'rendered thinking and tools',
           'startup configuration detection and one-click refresh',
           'no credentials exposed in IPC',
+          'permission mode switches in composer and settings and survives restart',
           'dark and light wallpaper mapping',
           'search full text',
           'project path with spaces and Chinese',

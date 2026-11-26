@@ -4,10 +4,10 @@
   color: #e7e5e2;
   background: #191a1b;
   color-scheme: dark;
-  --bg: #0c111bbc;
-  --sidebar: #10141bc7;
-  --panel: #19212dc4;
-  --raised: #24303dcb;
+  --bg: #0c111be0;
+  --sidebar: #10141be3;
+  --panel: #19212de3;
+  --raised: #24303de6;
   --hover: #405167b3;
   --text: #f2eeeb;
   --muted: #c1c7d2;
@@ -25,7 +25,7 @@
   --wallpaper-veil:
     linear-gradient(110deg, #080c16a3 0%, #080d1929 55%, #080c162e),
     linear-gradient(0deg, #090e1da6, transparent 50%);
-  --glass: linear-gradient(145deg, #1a2635ab, #10192591);
+  --glass: linear-gradient(145deg, #1a2635de, #101925d4);
   --glass-highlight: #edf3ff17;
   --modal-bg: #18212ef2;
   --text-shadow: 0 1px 8px #0008;
@@ -35,10 +35,10 @@
 }
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #f1f8fbd1;
-  --sidebar: #eaf4fad6;
-  --panel: #f5fbffce;
-  --raised: #e2eef7d9;
+  --bg: #f1f8fbea;
+  --sidebar: #eaf4faeb;
+  --panel: #f5fbffeb;
+  --raised: #e2eef7eb;
   --hover: #c4dcecc9;
   --text: #1d3449;
   --muted: #3c566e;
@@ -56,7 +56,7 @@
   --wallpaper-veil:
     linear-gradient(110deg, #eaf6ffb8 0%, #e8f5ff66 55%, #d7ebfc33),
     linear-gradient(0deg, #e7f3fcb3, #ecf7ff14 58%);
-  --glass: linear-gradient(145deg, #f4fbffcb, #e5f2fbb0);
+  --glass: linear-gradient(145deg, #f4fbffed, #e5f2fbe3);
   --glass-highlight: #ffffffaa;
   --modal-bg: #f1f8fcf5;
   --text-shadow: 0 1px 8px #f0f8ff77;
@@ -211,9 +211,11 @@ kbd {
   align-items: center;
   justify-content: center;
 }
-.brand-mark svg {
+.brand-mark img {
   width: 100%;
   height: 100%;
+  object-fit: contain;
+  border-radius: 20%;
 }
 .brand-mark.small {
   width: 25px;
@@ -1884,7 +1886,7 @@ details[open] > summary .disclosure {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 19px 20px;
-  backdrop-filter: blur(5px);
+  backdrop-filter: blur(10px);
   box-shadow:
     0 8px 24px #0712221a,
     inset 0 1px var(--glass-highlight);
@@ -1913,6 +1915,40 @@ details[open] > summary .disclosure {
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
+}
+.permission-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.permission-switch select {
+  padding: 5px 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.permission-switch select:focus-visible,
+.settings-permission-select:focus-visible {
+  outline: 1px solid var(--accent);
+}
+.permission-switch option {
+  background: var(--modal-bg);
+}
+.settings-permission-select {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
 }
 .config-sync-button:hover:not(:disabled) {
   border-color: var(--accent);

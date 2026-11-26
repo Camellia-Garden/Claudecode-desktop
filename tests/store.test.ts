@@ -77,3 +77,26 @@ test('session IDs cannot escape the session directory', () => {
   const session = store.newSession(project.id);
   assert.throws(() => store.save({ ...session, id: '../escape' }), /无效会话 ID/);
 });
+
+test('permission mode defaults to manual and an explicit full-access choice survives restart', () => {
+  const { root, store } = fixture();
+  assert.equal(store.permissionMode, 'default');
+  store.setPermissionMode('bypassPermissions');
+  assert.equal(new Store(root).permissionMode, 'bypassPermissions');
+  store.setPermissionMode('default');
+  assert.equal(new Store(root).permissionMode, 'default');
+  assert.throws(() => store.setPermissionMode('invalid' as any), /无效权限/);
+});
+
+test('older settings and unknown permission modes retain manual permissions', () => {
+  const { root } = fixture();
+  for (const permissionMode of [undefined, 'unknown']) {
+    writeFileSync(
+      join(root, 'settings.json'),
+      JSON.stringify({ projects: [], theme: 'light', permissionMode }),
+    );
+    const loaded = new Store(root);
+    assert.equal(loaded.permissionMode, 'default');
+    assert.equal(loaded.theme, 'light');
+  }
+});

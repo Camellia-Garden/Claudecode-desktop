@@ -23,6 +23,7 @@ import type {
   SearchResult,
   SessionSummary,
   Theme,
+  PermissionMode,
 } from '../shared/types';
 import { IconButton, Modal } from './components';
 
@@ -329,6 +330,9 @@ export function SettingsModal({
   data,
   theme,
   onTheme,
+  onPermissionMode,
+  savingPermissionMode,
+  onQuit,
   onClose,
   syncing,
   onSync,
@@ -336,6 +340,9 @@ export function SettingsModal({
   data: Bootstrap;
   theme: Theme;
   onTheme: (theme: Theme) => void;
+  onPermissionMode: (mode: PermissionMode) => void;
+  savingPermissionMode: boolean;
+  onQuit: () => void;
   onClose: () => void;
   syncing: boolean;
   onSync: () => void;
@@ -367,6 +374,34 @@ export function SettingsModal({
           ))}
         </div>
         <p className="field-hint">深色 · 狐火夜境　/　浅色 · 霜蓝庭院</p>
+      </div>
+      <div className="settings-section">
+        <label htmlFor="settings-permission-mode">工具权限</label>
+        <select
+          id="settings-permission-mode"
+          aria-label="设置权限模式"
+          className="settings-permission-select"
+          value={data.permissionMode}
+          disabled={savingPermissionMode}
+          onChange={(event) => onPermissionMode(event.target.value as PermissionMode)}
+        >
+          <option value="default">默认权限 · 按需询问</option>
+          <option value="bypassPermissions">完全访问 · 无需逐项授权</option>
+        </select>
+        <p className="field-hint">
+          完全访问允许 Claude Code
+          读写文件与运行命令。选择会保留并用于后续任务，当前任务保持原权限；需要你选择的实际问题仍会显示。
+        </p>
+      </div>
+      <div className="settings-section">
+        <label>窗口与托盘</label>
+        <p className="field-hint">
+          关闭窗口会隐藏到右下角托盘，任务继续执行。单击图标恢复，右键选择“退出工作台”彻底退出。图标可能在
+          Windows 的“显示隐藏的图标”中。
+        </p>
+        <button className="button secondary" onClick={onQuit}>
+          退出工作台
+        </button>
       </div>
       <div className="settings-section">
         <label>Claude Code</label>

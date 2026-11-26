@@ -34,6 +34,7 @@ import {
   Download,
   Pencil,
   RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
 import type {
   Bootstrap,
@@ -42,6 +43,7 @@ import type {
   Session,
   SessionSummary,
   Theme,
+  PermissionMode,
 } from '../shared/types';
 import { Brand, IconButton, Message, Modal, PermissionCard } from './components';
 import {
@@ -89,6 +91,7 @@ export function App() {
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
   const [sending, setSending] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [savingPermissionMode, setSavingPermissionMode] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const activeId = useRef('');
   const selectSequence = useRef(0);
@@ -302,6 +305,23 @@ export function App() {
   const changeTheme = (next: Theme) => {
     setTheme(next);
     void window.desktop.setTheme(next).catch(onError);
+  };
+  const changePermissionMode = async (mode: PermissionMode) => {
+    if (savingPermissionMode || mode === data?.permissionMode) return;
+    setSavingPermissionMode(true);
+    try {
+      await window.desktop.setPermissionMode(mode);
+      setData((previous) => (previous ? { ...previous, permissionMode: mode } : previous));
+      notify(
+        mode === 'bypassPermissions'
+          ? '已保存完全访问：后续任务无需逐项授权，当前任务保持原权限'
+          : '已保存默认权限：后续任务按需询问，当前任务保持原权限',
+      );
+    } catch (error) {
+      onError(error);
+    } finally {
+      setSavingPermissionMode(false);
+    }
   };
   const projectAdded = (item: Project) => {
     setData((previous) =>
@@ -763,6 +783,16 @@ export function App() {
                   下一条消息将附带项目记忆
                 </div>
               )}
+              {active &&
+                session?.permissionMode &&
+                session.permissionMode !== data?.permissionMode && (
+                  <div className="composer-status">
+                    <ShieldCheck size={13} />
+                    本轮保持
+                    {session.permissionMode === 'bypassPermissions' ? '完全访问' : '默认权限'}
+                    ，新权限从下一轮生效。
+                  </div>
+                )}
               <div className={`composer ${active ? 'is-running' : ''}`}>
                 <div className="composer-references">
                   {draft.referenceIds.map((id) => (
@@ -818,6 +848,23 @@ export function App() {
                       <Link size={17} />
                     </IconButton>
                     <span className="toolbar-divider" />
+                    <label
+                      className="permission-switch"
+                      title="权限选择会保留，适用于后续任务；完全访问允许读写文件和执行命令，无需逐项授权。"
+                    >
+                      <ShieldCheck size={13} />
+                      <select
+                        aria-label="权限模式"
+                        value={data?.permissionMode || 'default'}
+                        disabled={savingPermissionMode || !data}
+                        onChange={(event) =>
+                          void changePermissionMode(event.target.value as PermissionMode)
+                        }
+                      >
+                        <option value="default">默认权限</option>
+                        <option value="bypassPermissions">完全访问</option>
+                      </select>
+                    </label>
                     <span
                       className="model-label"
                       title={
@@ -993,6 +1040,9 @@ export function App() {
           data={data}
           theme={theme}
           onTheme={changeTheme}
+          onPermissionMode={(mode) => void changePermissionMode(mode)}
+          savingPermissionMode={savingPermissionMode}
+          onQuit={() => void window.desktop.quitApp().catch(onError)}
           syncing={syncing}
           onSync={() => void syncConfig()}
           onClose={() => setModal(null)}

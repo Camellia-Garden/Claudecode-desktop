@@ -34,7 +34,11 @@ try {
     if (child.exitCode !== null)
       throw new Error(`Portable exited before startup: ${child.exitCode}`);
     try {
-      browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 1000 });
+      // Keep native focus/visibility instead of Playwright's default emulation.
+      browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, {
+        timeout: 1000,
+        noDefaults: true,
+      });
       break;
     } catch {
       await new Promise((done) => setTimeout(done, 500));
@@ -69,6 +73,10 @@ try {
   assert.equal(errors.length, 0, errors.join('\n'));
   await page.screenshot({ path: 'test-results/portable-light.png', animations: 'disabled' });
   await page.getByRole('button', { name: '关闭窗口', exact: true }).click();
+  // Animation frames pause once the window hides, so poll with a timer instead.
+  await page.waitForFunction(() => document.hidden, undefined, { polling: 100 });
+  assert.equal(child.exitCode, null, 'Closing the window should keep the portable app in its tray');
+  await page.evaluate(() => window.desktop.quitApp());
   if (child.exitCode === null) {
     await Promise.race([
       once(child, 'exit'),
@@ -88,6 +96,7 @@ try {
         startupSync: true,
         manualSync: true,
         wallpaperLoaded: true,
+        closeToTray: true,
         cleanExit: true,
       },
       null,

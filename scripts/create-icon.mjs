@@ -1,59 +1,65 @@
-import { deflateSync } from 'node:zlib';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const size = 256;
-const raw = Buffer.alloc((size * 4 + 1) * size);
-for (let y = 0; y < size; y++)
-  for (let x = 0; x < size; x++) {
-    const dx = x / 2 - 63.5,
-      dy = y / 2 - 63.5;
-    const offset = y * (size * 4 + 1) + 1 + x * 4;
-    const cornerX = Math.max(Math.abs(dx) - 40, 0),
-      cornerY = Math.max(Math.abs(dy) - 40, 0);
-    const inside = cornerX * cornerX + cornerY * cornerY < 24 * 24;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const arc = distance >= 34 && distance <= 43 && (dx < 20 || Math.abs(dy) > 25);
-    const cross =
-      (Math.abs(dy) < 4 && dx > -26 && dx < 31) || (Math.abs(dx) < 4 && Math.abs(dy) < 25);
-    raw[offset] = arc || cross ? 215 : 30;
-    raw[offset + 1] = arc || cross ? 165 : 31;
-    raw[offset + 2] = arc || cross ? 129 : 32;
-    raw[offset + 3] = inside ? 255 : 0;
-  }
-function crc32(buffer) {
-  let crc = -1;
-  for (const byte of buffer) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  return (crc ^ -1) >>> 0;
+const script = fileURLToPath(import.meta.url);
+const root = resolve(dirname(script), '..');
+
+// Reuse Electron's image codecs; no additional image dependency is needed.
+if (!process.versions.electron) {
+  const { default: executable } = await import('electron');
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const result = spawnSync(executable, [script], { env, stdio: 'inherit', windowsHide: true });
+  if (result.error) throw result.error;
+  process.exit(result.status ?? 1);
 }
-function chunk(type, data) {
-  const name = Buffer.from(type),
-    length = Buffer.alloc(4),
-    checksum = Buffer.alloc(4);
-  length.writeUInt32BE(data.length);
-  checksum.writeUInt32BE(crc32(Buffer.concat([name, data])));
-  return Buffer.concat([length, name, data, checksum]);
+
+const { app, nativeImage } = await import('electron');
+try {
+  const source = nativeImage.createFromPath(join(root, 'assets', 'icon-source.png'));
+  if (source.isEmpty()) throw new Error('Cannot read assets/icon-source.png');
+  const dimensions = source.getSize();
+  const size = 512;
+  const scale = size / Math.max(dimensions.width, dimensions.height);
+  const width = Math.max(1, Math.round(dimensions.width * scale));
+  const height = Math.max(1, Math.round(dimensions.height * scale));
+  const resized = source.resize({ width, height, quality: 'best' }).getBitmap();
+  const square = Buffer.alloc(size * size * 4);
+  const left = Math.floor((size - width) / 2);
+  const top = Math.floor((size - height) / 2);
+  for (let row = 0; row < height; row++) {
+    resized.copy(square, ((row + top) * size + left) * 4, row * width * 4, (row + 1) * width * 4);
+  }
+  const icon = nativeImage.createFromBitmap(square, { width: size, height: size });
+  const assets = join(root, 'assets');
+  mkdirSync(assets, { recursive: true });
+  writeFileSync(join(assets, 'icon.png'), icon.toPNG());
+
+  const sizes = [16, 24, 32, 48, 64, 128, 256];
+  const images = sizes.map((width) =>
+    icon.resize({ width, height: width, quality: 'best' }).toPNG(),
+  );
+  const header = Buffer.alloc(6 + sizes.length * 16);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(sizes.length, 4);
+  let offset = header.length;
+  for (let index = 0; index < sizes.length; index++) {
+    const entry = 6 + index * 16;
+    header[entry] = header[entry + 1] = sizes[index] === 256 ? 0 : sizes[index];
+    header.writeUInt16LE(1, entry + 4);
+    header.writeUInt16LE(32, entry + 6);
+    header.writeUInt32LE(images[index].length, entry + 8);
+    header.writeUInt32LE(offset, entry + 12);
+    offset += images[index].length;
+  }
+  writeFileSync(join(assets, 'icon.ico'), Buffer.concat([header, ...images]));
+  console.log(
+    'Created icon.png (512px) and icon.ico (' + sizes.join(', ') + 'px) from the supplied image.',
+  );
+  app.exit(0);
+} catch (error) {
+  console.error(error);
+  app.exit(1);
 }
-const header = Buffer.alloc(13);
-header.writeUInt32BE(size, 0);
-header.writeUInt32BE(size, 4);
-header[8] = 8;
-header[9] = 6;
-const png = Buffer.concat([
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-  chunk('IHDR', header),
-  chunk('IDAT', deflateSync(raw)),
-  chunk('IEND', Buffer.alloc(0)),
-]);
-mkdirSync('assets', { recursive: true });
-writeFileSync('assets/icon.png', png);
-const icoHeader = Buffer.alloc(22);
-icoHeader.writeUInt16LE(1, 2);
-icoHeader.writeUInt16LE(1, 4);
-icoHeader.writeUInt16LE(1, 10);
-icoHeader.writeUInt16LE(32, 12);
-icoHeader.writeUInt32LE(png.length, 14);
-icoHeader.writeUInt32LE(22, 18);
-writeFileSync('assets/icon.ico', Buffer.concat([icoHeader, png]));

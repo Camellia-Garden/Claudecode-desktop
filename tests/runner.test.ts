@@ -75,7 +75,7 @@ const success = {
   usage: { input_tokens: 2, output_tokens: 3 },
 } as SDKMessage;
 
-test('local CLI, cwd and settings are passed through without provider/model/permission overrides', async () => {
+test('local CLI and model settings pass through with manual permissions by default', async () => {
   let captured: Options | undefined;
   const context = fixture(async function* (_prompt, options) {
     captured = options;
@@ -90,7 +90,7 @@ test('local CLI, cwd and settings are passed through without provider/model/perm
   assert.deepEqual(captured?.systemPrompt, { type: 'preset', preset: 'claude_code' });
   assert.equal(captured?.model, undefined);
   assert.equal(captured?.env, undefined);
-  assert.equal(captured?.permissionMode, undefined);
+  assert.equal(captured?.permissionMode, 'default');
   assert.equal(captured?.allowDangerouslySkipPermissions, undefined);
   assert.equal(context.session.cliSessionId, 'test-cli-session');
 });
@@ -224,4 +224,86 @@ test('simultaneous sends cannot launch two queries for one session', async () =>
   assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
   assert.equal(calls, 1);
   await context.runner.stopAll();
+});
+
+test('explicit full access enables SDK bypass and approves tools without permission cards', async () => {
+  let captured: Options | undefined;
+  const context = fixture(async function* (_prompt, options) {
+    captured = options;
+    yield init;
+    const decision = await options.canUseTool!(
+      'Bash',
+      { command: 'fixture-only' },
+      { signal: options.abortController!.signal, toolUseID: 'full-access-tool' },
+    );
+    assert.equal(decision.behavior, 'allow');
+    yield success;
+  });
+  context.store.setPermissionMode('bypassPermissions');
+  await context.runner.start({
+    sessionId: context.session.id,
+    text: 'Run the fixture',
+    referenceIds: [],
+  });
+  await context.wait((event) => event.type === 'session' && event.session.status === 'idle');
+  assert.equal(captured?.permissionMode, 'bypassPermissions');
+  assert.equal(captured?.allowDangerouslySkipPermissions, true);
+  assert.equal(
+    context.events.some((event) => event.type === 'permission'),
+    false,
+  );
+  assert.equal(context.session.permissionMode, 'bypassPermissions');
+});
+
+test('full access still asks the user for actual AskUserQuestion answers', async () => {
+  let decision: any;
+  const context = fixture(async function* (_prompt, options) {
+    yield init;
+    decision = await options.canUseTool!(
+      'AskUserQuestion',
+      { questions: [{ question: 'Pick a color' }] },
+      { signal: options.abortController!.signal, toolUseID: 'full-access-question' },
+    );
+    yield success;
+  });
+  context.store.setPermissionMode('bypassPermissions');
+  await context.runner.start({ sessionId: context.session.id, text: 'Ask me', referenceIds: [] });
+  const event = await context.wait((event) => event.type === 'permission');
+  if (event.type !== 'permission') throw new Error('Expected a question');
+  context.runner.answer({
+    id: event.request.id,
+    allow: true,
+    answers: { 'Pick a color': 'Orange' },
+  });
+  await context.wait((event) => event.type === 'session' && event.session.status === 'idle');
+  assert.equal(decision.updatedInput.answers['Pick a color'], 'Orange');
+});
+
+test('changing the saved mode does not silently escalate a running request', async () => {
+  const modes: Options['permissionMode'][] = [];
+  const context = fixture(async function* (_prompt, options) {
+    modes.push(options.permissionMode);
+    yield init;
+    await options.canUseTool!(
+      'Write',
+      { file_path: 'fixture.txt' },
+      { signal: options.abortController!.signal, toolUseID: 'snapshot' },
+    );
+    yield success;
+  });
+  await context.runner.start({ sessionId: context.session.id, text: 'First', referenceIds: [] });
+  const event = await context.wait((event) => event.type === 'permission');
+  context.store.setPermissionMode('bypassPermissions');
+  assert.equal(context.session.permissionMode, 'default');
+  assert.equal(context.runner.pending().length, 1);
+  if (event.type !== 'permission') throw new Error('Expected permission');
+  context.runner.answer({ id: event.request.id, allow: true });
+  await context.wait((event) => event.type === 'session' && event.session.status === 'idle');
+  const next = context.store.newSession(context.project.id);
+  await context.runner.start({ sessionId: next.id, text: 'Next', referenceIds: [] });
+  await context.wait(
+    (event) =>
+      event.type === 'session' && event.session.id === next.id && event.session.status === 'idle',
+  );
+  assert.deepEqual(modes, ['default', 'bypassPermissions']);
 });

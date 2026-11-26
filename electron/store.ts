@@ -9,11 +9,19 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { Project, Session, SessionSummary, Theme, SearchResult } from '../shared/types.js';
+import type {
+  Project,
+  Session,
+  SessionSummary,
+  Theme,
+  SearchResult,
+  PermissionMode,
+} from '../shared/types.js';
 
 interface Settings {
   projects: Project[];
   theme: Theme;
+  permissionMode: PermissionMode;
 }
 
 export function summarize(session: Session): SessionSummary {
@@ -48,7 +56,7 @@ export class Store {
 
   constructor(readonly root: string) {
     mkdirSync(join(root, 'sessions'), { recursive: true });
-    this.settings = { projects: [], theme: 'dark' };
+    this.settings = { projects: [], theme: 'dark', permissionMode: 'default' };
     const settingsPath = join(root, 'settings.json');
     if (existsSync(settingsPath)) {
       try {
@@ -57,6 +65,8 @@ export class Store {
         this.settings = {
           projects: loaded.projects,
           theme: ['dark', 'light', 'system'].includes(loaded.theme) ? loaded.theme : 'dark',
+          permissionMode:
+            loaded.permissionMode === 'bypassPermissions' ? 'bypassPermissions' : 'default',
         };
       } catch {
         const backup = `${settingsPath}.corrupt-${Date.now()}`;
@@ -94,6 +104,14 @@ export class Store {
   setTheme(theme: Theme) {
     if (!['dark', 'light', 'system'].includes(theme)) throw new Error('无效主题');
     this.settings.theme = theme;
+    this.saveSettings();
+  }
+  get permissionMode() {
+    return this.settings.permissionMode;
+  }
+  setPermissionMode(mode: PermissionMode) {
+    if (!['default', 'bypassPermissions'].includes(mode)) throw new Error('无效权限模式');
+    this.settings.permissionMode = mode;
     this.saveSettings();
   }
   private saveSettings() {
