@@ -1,0 +1,81 @@
+{
+  "name": "claude-workbench",
+  "version": "0.2.0",
+  "private": true,
+  "description": "A local desktop workspace for your existing Claude Code installation",
+  "type": "module",
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.electron.json",
+    "start": "electron .",
+    "test": "tsx --test tests/*.test.ts",
+    "test:desktop": "node scripts/test-desktop.mjs",
+    "test:connection": "node scripts/test-connection.mjs",
+    "package": "npm run build && electron-builder --win dir",
+    "dist": "npm run build && electron-builder --win nsis portable --publish never"
+  },
+  "build": {
+    "appId": "local.claude.workbench",
+    "productName": "Claude Workbench",
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "assets/**",
+      "package.json",
+      "!node_modules/@anthropic-ai/claude-agent-sdk-win32-*/**",
+      "!node_modules/@anthropic-ai/claude-agent-sdk-linux-*/**",
+      "!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**"
+    ],
+    "asarUnpack": [
+      "node_modules/@anthropic-ai/claude-agent-sdk/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico",
+      "signExecutable": false
+    },
+    "portable": {
+      "artifactName": "Claude-Workbench-${version}.exe"
+    },
+    "nsis": {
+      "artifactName": "Claude-Workbench-Setup-${version}.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Claude Workbench",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.332",
+    "lucide-react": "^1.81.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.11",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
+    "playwright": "^1.65.1",
+    "prettier": "^3.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}
